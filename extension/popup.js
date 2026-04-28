@@ -27,6 +27,29 @@ function loadData() {
         blockedEl.textContent = blocked;
         safeEl.textContent = safe;
 
+        // ── Mini Attack Breakdown Chart ───────────────────────────────────
+        // Build attack type frequency from non-ALLOW entries
+        const attackCounts = {};
+        history.forEach(e => {
+            if (e.action === 'ALLOW') return;
+            const type = e.attack_type;
+            if (!type || type === 'Unknown' || type === 'None') return;
+            const label = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            attackCounts[label] = (attackCounts[label] || 0) + 1;
+        });
+        const chartData = Object.entries(attackCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+
+        if (typeof window.renderAttackChart === 'function') {
+            window.renderAttackChart('mini-chart-container', chartData, {
+                size: 120,
+                mode: 'compact',
+                showCenterText: true,
+                animationDuration: 700,
+            });
+        }
+
         // ── Render history entries ────────────────────────────────────
         if (history.length === 0) {
             historyContainer.innerHTML = `

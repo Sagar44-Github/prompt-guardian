@@ -109,54 +109,36 @@ function renderTable(history) {
   }).join('');
 }
 
-// ── DONUT CHART ─────────────────────────────────────────────────────────────
-function renderDonut(history) {
-  const donut = document.getElementById('donut-chart');
-  const legend = document.getElementById('chart-legend');
-
-  // Count attack types (only from non-ALLOW entries)
+// ── ATTACK CHART (SVG via chart.js) ─────────────────────────────────────────
+function renderChart(history) {
+  // Build frequency map of attack_type (exclude ALLOW and Unknown/None)
   const counts = {};
   history.forEach(entry => {
     if (entry.action === 'ALLOW') return;
-    const k = normalizeKey(entry.attack_type) || 'other';
-    counts[k] = (counts[k] || 0) + 1;
-  });
-
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-
-  if (total === 0) {
-    donut.style.background = '#1E2D4A';
-    legend.innerHTML = `<div style="color:#475569;font-size:12px;text-align:center;padding:20px;">No threats detected yet</div>`;
-    return;
-  }
-
-  // Build conic-gradient segments
-  let gradientParts = [];
-  let currentDeg = 0;
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
-  const legendItems = entries.map(([type, count]) => {
-    const color = ATTACK_COLORS[type] || ATTACK_COLORS['other'];
-    const pct = (count / total) * 100;
-    const deg = (count / total) * 360;
-
-    gradientParts.push(`${color} ${currentDeg}deg ${currentDeg + deg}deg`);
-    currentDeg += deg;
-
+    const type = entry.attack_type;
+    if (!type || type === 'Unknown' || type === 'None') return;
     const label = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    return `
-      <div class="legend-item">
-        <div class="legend-dot" style="background:${color}"></div>
-        <span class="legend-label">${label}</span>
-        <span class="legend-count">${count}</span>
-        <span class="legend-pct">(${pct.toFixed(0)}%)</span>
-      </div>`;
+    counts[label] = (counts[label] || 0) + 1;
   });
 
-  donut.style.background = `conic-gradient(${gradientParts.join(', ')})`;
-  donut.style.boxShadow = '0 0 30px rgba(96,165,250,0.1)';
-  legend.innerHTML = legendItems.join('');
+  // Convert to array format expected by renderAttackChart
+  const chartData = Object.entries(counts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Render using the custom SVG engine from chart.js
+  if (typeof window.renderAttackChart === 'function') {
+    window.renderAttackChart('attack-chart-container', chartData, {
+      size: 240,
+      mode: 'full',
+      showCenterText: true,
+      animationDuration: 900,
+    });
+  } else {
+    console.warn('[dashboard.js] chart.js not loaded — window.renderAttackChart missing');
+  }
 }
+
 
 // ── TIMELINE ────────────────────────────────────────────────────────────────
 function renderTimeline(history) {
@@ -232,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Render Sections ──────────────────────────────────────────────────
     renderTable(history);
-    renderDonut(history);
+    renderChart(history);
     renderTimeline(history);
     renderFooter(history);
   });
