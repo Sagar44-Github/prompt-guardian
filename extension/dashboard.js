@@ -281,3 +281,48 @@ async function loadGlobalThreatIntel() {
     if (lastUpdEl) lastUpdEl.textContent = 'Unavailable';
   }
 }
+
+// ── DASHBOARD EXPORT FORENSIC REPORT ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const exportBtn = document.getElementById('dashboard-export-btn');
+  if (!exportBtn) return;
+
+  exportBtn.addEventListener('click', async () => {
+    const originalText = exportBtn.textContent;
+    exportBtn.disabled = true;
+    exportBtn.textContent = '⏳ Generating Report...';
+
+    try {
+      // 1. Read session history from chrome.storage
+      const stored = await new Promise(resolve =>
+        chrome.storage.local.get(['pg_history'], resolve)
+      );
+      const history = stored.pg_history || [];
+
+      // 2. POST to /generate-report
+      const res = await fetch('http://127.0.0.1:5000/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const reportData = await res.json();
+
+      // 3. Store for report.html
+      await new Promise(resolve =>
+        chrome.storage.local.set({ pg_report_data: reportData }, resolve)
+      );
+
+      // 4. Open report in new tab
+      chrome.tabs.create({ url: chrome.runtime.getURL('report.html') });
+
+    } catch (err) {
+      alert('Report generation failed. Make sure the backend is running.\n\nError: ' + err.message);
+    } finally {
+      setTimeout(() => {
+        exportBtn.disabled = false;
+        exportBtn.textContent = originalText;
+      }, 2000);
+    }
+  });
+});

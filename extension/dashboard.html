@@ -431,18 +431,42 @@
     .intel-status.Active-Threat               { color: #EF4444; }
     .intel-status.Under-Investigation         { color: #F59E0B; }
     .intel-status.Mitigated-by-Prompt-Guardian { color: #60A5FA; }
+    /* ── EXPORT REPORT BUTTON ── */
+    #dashboard-export-btn {
+      position: absolute;
+      top: 20px; right: 32px;
+      background: #DC2626;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(220,38,38,0.35);
+      transition: background 0.2s, transform 0.15s;
+      letter-spacing: 0.3px;
+    }
+    #dashboard-export-btn:hover {
+      background: #B91C1C;
+      transform: translateY(-1px);
+    }
+    #dashboard-export-btn:disabled {
+      opacity: 0.7; cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
 
   <!-- ── HEADER ── -->
-  <div class="dashboard-header">
+  <div class="dashboard-header" style="position:relative;">
     <div class="header-badge">
       <span class="dot"></span>
       Live Session
     </div>
     <h1>🛡️ PROMPT GUARDIAN — THREAT INTELLIGENCE CENTER</h1>
     <p>Real-time session analytics for prompt injection defense</p>
+    <button id="dashboard-export-btn">📄 Export Forensic Report</button>
   </div>
 
   <!-- ── MAIN GRID ── -->

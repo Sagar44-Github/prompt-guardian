@@ -39,7 +39,13 @@
     },
     "web_accessible_resources": [
         {
-            "resources": ["dashboard.html", "dashboard.js"],
+            "resources": [
+                "dashboard.html",
+                "dashboard.js",
+                "report.html",
+                "report.js",
+                "chart.js"
+            ],
             "matches": ["<all_urls>"]
         }
     ]

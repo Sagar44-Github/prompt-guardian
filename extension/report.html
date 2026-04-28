@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Guardian — Forensic Security Report</title>
+  <style>
+    /* ── FONTS & RESET ────────────────────────────────────────────────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+      background: #F8FAFC;
+      color: #1F2937;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* ── PRINT BUTTON (screen only) ─────────────────────────────────────── */
+    #print-bar {
+      background: #1E40AF;
+      color: white;
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #print-bar span { font-size: 13px; }
+    #print-btn {
+      background: #DC2626;
+      color: white;
+      border: none;
+      padding: 9px 22px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 0.4px;
+    }
+    #print-btn:hover { background: #B91C1C; }
+
+    /* ── REPORT WRAPPER ──────────────────────────────────────────────────── */
+    .report-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+
+    /* ── HEADER BANNER ───────────────────────────────────────────────────── */
+    .report-header {
+      background: linear-gradient(135deg, #0F1729 0%, #1B3A6B 100%);
+      color: white;
+      padding: 36px 40px 28px;
+      border-bottom: 4px solid #DC2626;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .report-header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .report-header .sub {
+      font-size: 13px;
+      letter-spacing: 2.5px;
+      color: #93C5FD;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .report-meta {
+      text-align: right;
+    }
+    .report-meta .report-id {
+      font-family: 'Courier New', monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: #FBBF24;
+      margin-bottom: 4px;
+    }
+    .report-meta .gen-time {
+      font-size: 11px;
+      color: #93C5FD;
+    }
+
+    /* ── SECTIONS ────────────────────────────────────────────────────────── */
+    .section {
+      padding: 32px 40px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .section:last-child { border-bottom: none; }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      color: #1E40AF;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+    }
+    .section-title::after {
+      content: '';
+      display: block;
+      width: 60px;
+      height: 3px;
+      background: #DC2626;
+      margin-top: 6px;
+    }
+
+    /* ── EXECUTIVE SUMMARY ──────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 18px 14px;
+      text-align: center;
+    }
+    .stat-box.blue   { border-top: 4px solid #1E40AF; }
+    .stat-box.red    { border-top: 4px solid #DC2626; }
+    .stat-box.green  { border-top: 4px solid #059669; }
+    .stat-box.amber  { border-top: 4px solid #D97706; }
+    .stat-num {
+      font-family: 'Courier New', monospace;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-box.blue  .stat-num { color: #1E40AF; }
+    .stat-box.red   .stat-num { color: #DC2626; }
+    .stat-box.green .stat-num { color: #059669; }
+    .stat-box.amber .stat-num { color: #D97706; }
+    .stat-lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #6B7280;
+      font-weight: 600;
+    }
+    .exec-para {
+      background: #F1F5F9;
+      border-left: 4px solid #1E40AF;
+      padding: 14px 18px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #374151;
+      line-height: 1.7;
+    }
+
+    /* ── SEVERITY BARS ───────────────────────────────────────────────────── */
+    #severity-bars { display: flex; flex-direction: column; gap: 12px; }
+    .sev-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .sev-label {
+      width: 70px;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sev-bar-wrap {
+      flex: 1;
+      background: #F3F4F6;
+      border-radius: 4px;
+      height: 18px;
+      overflow: hidden;
+    }
+    .sev-bar {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s ease;
+    }
+    .sev-count {
+      width: 32px;
+      text-align: right;
+      font-family: 'Courier New', monospace;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    /* ── ATTACK TABLE ────────────────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    thead th {
+      background: #1E40AF;
+      color: white;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    tbody tr:nth-child(even) { background: #F9FAFB; }
+    tbody tr:hover { background: #EFF6FF; }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #E5E7EB;
+      vertical-align: middle;
+    }
+    .mini-bar-wrap {
+      display: inline-block;
+      background: #E5E7EB;
+      border-radius: 3px;
+      height: 8px;
+      width: 80px;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .mini-bar {
+      height: 100%;
+      background: #1E40AF;
+      border-radius: 3px;
+    }
+
+    /* ── TOP THREATS ─────────────────────────────────────────────────────── */
+    .threat-card {
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+      background: white;
+    }
+    .threat-card:last-child { margin-bottom: 0; }
+    .threat-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .threat-risk-badge {
+      font-family: 'Courier New', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: #DC2626;
+    }
+    .threat-type {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1F2937;
+      margin-left: 12px;
+    }
+    .threat-ts {
+      font-size: 11px;
+      color: #9CA3AF;
+      font-family: 'Courier New', monospace;
+    }
+    .threat-prompt {
+      background: #F3F4F6;
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #374151;
+      word-break: break-all;
+      margin-bottom: 8px;
+    }
+    .threat-meta {
+      font-size: 11px;
+      color: #6B7280;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 6px;
+    }
+    .badge-block { background: #FEE2E2; color: #DC2626; }
+    .badge-warn  { background: #FEF3C7; color: #D97706; }
+    .badge-allow { background: #D1FAE5; color: #059669; }
+
+    /* ── TIMELINE TABLE ──────────────────────────────────────────────────── */
+    tr.row-block { background: #FFF1F1; }
+    tr.row-warn  { background: #FFFBEB; }
+
+    /* ── RECOMMENDATIONS ─────────────────────────────────────────────────── */
+    .rec-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid #D1FAE5;
+      border-left: 4px solid #059669;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      background: #F0FDF4;
+      font-size: 13px;
+      color: #374151;
+    }
+    .rec-check { color: #059669; font-size: 16px; font-weight: 700; flex-shrink: 0; }
+
+    /* ── COMPLIANCE ──────────────────────────────────────────────────────── */
+    .compliance-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .compliance-box {
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .compliance-box h4 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #1E40AF;
+      margin-bottom: 10px;
+    }
+    .compliance-box ul { list-style: disc; padding-left: 18px; }
+    .compliance-box li { margin-bottom: 5px; font-size: 12px; }
+
+    /* ── ENGINE METADATA ─────────────────────────────────────────────────── */
+    .engine-table td:first-child {
+      font-weight: 600;
+      color: #374151;
+      width: 200px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .engine-table td:last-child {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #4B5563;
+    }
+
+    /* ── FOOTER ──────────────────────────────────────────────────────────── */
+    .report-footer {
+      background: #F8FAFC;
+      border-top: 2px solid #E5E7EB;
+      text-align: center;
+      padding: 20px;
+      font-size: 11px;
+      color: #9CA3AF;
+    }
+
+    /* ── PRINT STYLES ────────────────────────────────────────────────────── */
+    @media print {
+      @page {
+        size: A4;
+        margin: 1.5cm;
+        @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 10px; }
+      }
+      #print-bar { display: none !important; }
+      body { background: white; }
+      .report-wrap { box-shadow: none; max-width: 100%; }
+      .section { page-break-before: always; }
+      .section:first-of-type { page-break-before: avoid; }
+      .report-header { page-break-before: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Print Bar (screen only) -->
+  <div id="print-bar">
+    <span>🛡️ Prompt Guardian — Forensic Security Report &nbsp;|&nbsp; <span id="bar-report-id">PG-RPT-????????</span></span>
+    <button id="print-btn">🖨️ Print Report (Save as PDF)</button>
+  </div>
+
+  <div class="report-wrap">
+
+    <!-- ── HEADER ── -->
+    <div class="report-header">
+      <div>
+        <h1>🛡️ PROMPT GUARDIAN</h1>
+        <div class="sub">Forensic Security Report</div>
+      </div>
+      <div class="report-meta">
+        <div class="report-id">{{ REPORT_ID }}</div>
+        <div class="gen-time">Generated: {{ GENERATED_AT }}</div>
+        <div class="gen-time">Session: {{ SESSION_START }} → {{ SESSION_END }}</div>
+      </div>
+    </div>
+
+    <!-- ── 1. EXECUTIVE SUMMARY ── -->
+    <div class="section">
+      <div class="section-title">Executive Summary</div>
+      <div class="stat-grid">
+        <div class="stat-box blue">
+          <div class="stat-num">{{ TOTAL_PROMPTS }}</div>
+          <div class="stat-lbl">Total Analyzed</div>
+        </div>
+        <div class="stat-box red">
+          <div class="stat-num">{{ THREATS_BLOCKED }}</div>
+          <div class="stat-lbl">Threats Blocked</div>
+        </div>
+        <div class="stat-box green">
+          <div class="stat-num">{{ SAFE_PROMPTS }}</div>
+          <div class="stat-lbl">Safe Prompts</div>
+        </div>
+        <div class="stat-box amber">
+          <div class="stat-num">{{ BLOCK_RATE }}</div>
+          <div class="stat-lbl">Block Rate</div>
+        </div>
+      </div>
+      <div class="exec-para">{{ EXECUTIVE_PARAGRAPH }}</div>
+    </div>
+
+    <!-- ── 2. SEVERITY DISTRIBUTION ── -->
+    <div class="section">
+      <div class="section-title">Severity Distribution</div>
+      <div id="severity-bars"><!-- report.js populates --></div>
+    </div>
+
+    <!-- ── 3. ATTACK CATEGORY BREAKDOWN ── -->
+    <div class="section">
+      <div class="section-title">Attack Category Breakdown</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Count</th>
+            <th>Percentage</th>
+            <th>Highest Risk Score</th>
+          </tr>
+        </thead>
+        <tbody id="attack-category-tbody"><!-- report.js populates --></tbody>
+      </table>
+    </div>
+
+    <!-- ── 4. TOP 5 THREATS ── -->
+    <div class="section">
+      <div class="section-title">Top 5 Critical Threats</div>
+      <div id="top-threats-list"><!-- report.js populates --></div>
+    </div>
+
+    <!-- ── 5. COMPLETE SESSION LOG ── -->
+    <div class="section">
+      <div class="section-title">Complete Session Log</div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Timestamp</th>
+            <th>Prompt Snippet</th>
+            <th>Risk %</th>
+            <th>Attack Type</th>
+            <th>Action</th>
+            <th>User Decision</th>
+          </tr>
+        </thead>
+        <tbody id="timeline-log-tbody"><!-- report.js populates --></tbody>
+      </table>
+    </div>
+
+    <!-- ── 6. RECOMMENDATIONS ── -->
+    <div class="section">
+      <div class="section-title">Security Recommendations</div>
+      <div id="recommendations-list"><!-- report.js populates --></div>
+    </div>
+
+    <!-- ── 7. COMPLIANCE & STANDARDS ── -->
+    <div class="section">
+      <div class="section-title">Compliance & Standards</div>
+      <div class="compliance-grid">
+        <div class="compliance-box">
+          <h4>OWASP LLM Top 10</h4>
+          <p id="owasp-list" style="font-size:12px;color:#374151;"></p>
+          <h4 style="margin-top:14px;">MITRE ATLAS Techniques</h4>
+          <ul id="mitre-list"></ul>
+        </div>
+        <div class="compliance-box">
+          <h4>Data Handling</h4>
+          <p id="data-handling" style="font-size:12px;color:#374151;margin-bottom:12px;"></p>
+          <h4>Audit Trail</h4>
+          <p id="audit-trail" style="font-size:12px;color:#374151;"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 8. ENGINE METADATA ── -->
+    <div class="section">
+      <div class="section-title">Detection Engine Metadata</div>
+      <table class="engine-table">
+        <tbody id="engine-metadata-tbody"><!-- report.js populates --></tbody>
+      </table>
+    </div>
+
+    <!-- ── FOOTER ── -->
+    <div class="report-footer">
+      Generated by <strong>Prompt Guardian v1.0</strong> — Cybersecurity Hackathon 2026<br>
+      Report ID: {{ REPORT_ID }} &nbsp;|&nbsp; All data sourced from local chrome.storage
+    </div>
+
+  </div><!-- end .report-wrap -->
+
+  <script src="report.js"></script>
+</body>
+</html>

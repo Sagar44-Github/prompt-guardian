@@ -9,6 +9,7 @@ Routes:
     POST /analyze/batch   -> analyse multiple prompts
     GET  /stats           -> live request statistics
     GET  /threat-feed     -> global threat intelligence feed
+    POST /generate-report -> forensic session report generator
 """
 
 import os
@@ -24,6 +25,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from firewall.analyzer import analyze_prompt
 from firewall.threat_intel import get_threat_feed
+from firewall.report_generator import generate_report
 
 load_dotenv()
 
@@ -421,6 +423,26 @@ def threat_feed():
     except Exception as e:
         logger.error("Threat feed generation failed: %s", str(e), exc_info=True)
         return jsonify({"error": "Threat feed unavailable", "feed": []}), 500
+
+
+# ── Forensic Report Generator ───────────────────────────────────────────────────────
+
+@app.route("/generate-report", methods=["POST"])
+def generate_report_endpoint():
+    """
+    Generate a comprehensive forensic security report from session history.
+    Accepts: POST JSON body { "history": [...] }
+    Returns: Structured report dict as JSON.
+    """
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+        if "history" not in body:
+            return jsonify({"error": "Missing history field"}), 400
+        report = generate_report(body["history"])
+        return jsonify(report)
+    except Exception as e:
+        logger.error("Report generation failed: %s", str(e), exc_info=True)
+        return jsonify({"error": "Report generation failed", "details": str(e)}), 500
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
