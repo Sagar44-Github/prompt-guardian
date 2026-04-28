@@ -4,8 +4,8 @@ const API_URL = 'http://127.0.0.1:5000/analyze';
 let isAnalyzing = false;
 
 const PLATFORM_SELECTORS = {
-    'chat.openai.com': { input: '#prompt-textarea', send: '[data-testid="send-button"]' },
-    'chatgpt.com': { input: '#prompt-textarea', send: '[data-testid="send-button"]' },
+    'chat.openai.com': { input: '#prompt-textarea', send: '#composer-submit-button, [data-testid="send-button"]' },
+    'chatgpt.com': { input: '#prompt-textarea', send: '#composer-submit-button, [data-testid="send-button"]' },
     'gemini.google.com': { input: '.ql-editor', send: '.send-button' },
     'claude.ai': { input: '[contenteditable="true"]', send: '[aria-label="Send Message"]' },
 };
@@ -87,6 +87,12 @@ function showBlockOverlay(original, result, sel, inputEl) {
     const explanation = result.explanation || '';
     const sanitized = result.sanitized_prompt || '';
 
+    // Check if sanitized version is actually useful
+    // (not a blocking message and not just [REDACTED] markers)
+    const isUsefulSanitized = sanitized
+        && !sanitized.startsWith('[Entire prompt')
+        && sanitized.replace(/\[REDACTED\]/g, '').trim().length > 3;
+
     overlay.innerHTML = `
     <div class="pg-modal">
       <div class="pg-header danger">🚨 Threat Detected — ${attackLabel}</div>
@@ -98,14 +104,15 @@ function showBlockOverlay(original, result, sel, inputEl) {
 
         <div class="pg-explanation">${escapeHtml(explanation)}</div>
 
-        ${sanitized ? `
-        <div class="pg-sanitized-label">Sanitized version:</div>
+        ${isUsefulSanitized ? `
+        <div class="pg-sanitized-label">Sanitized version (injection removed):</div>
         <textarea id="pg-clean" class="pg-sanitized">${escapeHtml(sanitized)}</textarea>
-        ` : ''}
+        ` : `
+        <div class="pg-blocked-msg">This prompt is entirely malicious and has been blocked.</div>
+        `}
 
         <div class="pg-actions">
-          ${sanitized ? '<button class="pg-btn safe" id="pg-clean-send">Send Sanitized</button>' : ''}
-          <button class="pg-btn warn" id="pg-orig-send">Send Anyway</button>
+          ${isUsefulSanitized ? '<button class="pg-btn safe" id="pg-clean-send">Send Sanitized</button>' : ''}
           <button class="pg-btn cancel" id="pg-cancel">Cancel</button>
         </div>
       </div>
@@ -126,12 +133,6 @@ function showBlockOverlay(original, result, sel, inputEl) {
         };
     }
 
-    document.getElementById('pg-orig-send').onclick = () => {
-        overlay.remove();
-        logToHistory(original, result, 'override');
-        proceedWithSend(sel);
-    };
-
     document.getElementById('pg-cancel').onclick = () => overlay.remove();
 }
 
@@ -146,13 +147,14 @@ function showWarningOverlay(original, result, sel, inputEl) {
 
     overlay.innerHTML = `
     <div class="pg-modal">
-      <div class="pg-header warn">⚠️ Suspicious Prompt</div>
+      <div class="pg-header warn">⚠️ Suspicious Prompt Detected</div>
       <div class="pg-body">
         <div class="pg-score warn">Risk: ${riskScore}%</div>
         <div class="pg-explanation">${escapeHtml(explanation)}</div>
 
+        <div class="pg-blocked-msg">This prompt has been flagged as suspicious and cannot be sent.</div>
+
         <div class="pg-actions">
-          <button class="pg-btn warn" id="pg-orig-send">Send Anyway</button>
           <button class="pg-btn cancel" id="pg-cancel">Cancel</button>
         </div>
       </div>
@@ -161,12 +163,6 @@ function showWarningOverlay(original, result, sel, inputEl) {
 
     injectStyles();
     document.body.appendChild(overlay);
-
-    document.getElementById('pg-orig-send').onclick = () => {
-        overlay.remove();
-        logToHistory(original, result, 'override');
-        proceedWithSend(sel);
-    };
 
     document.getElementById('pg-cancel').onclick = () => overlay.remove();
 }
@@ -238,10 +234,35 @@ function logToHistory(prompt, result, userAction = 'auto') {
 function attachInterceptor() {
     const sel = getSelectors();
     const btn = document.querySelector(sel.send);
+    const inputEl = document.querySelector(sel.input);
 
+    // Intercept send button click
     if (btn && !btn._pgAttached) {
         btn.addEventListener('click', interceptPrompt, true);
         btn._pgAttached = true;
+        console.log('Prompt Guardian: Attached to send button');
+    }
+
+    // Intercept Enter key on input field
+    if (inputEl && !inputEl._pgKeyAttached) {
+        inputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                interceptPrompt(e);
+            }
+        }, true);
+        inputEl._pgKeyAttached = true;
+        console.log('Prompt Guardian: Attached to input field (Enter key)');
+    }
+
+    // Intercept form submit (ChatGPT wraps input in a form)
+    const form = inputEl?.closest('form');
+    if (form && !form._pgFormAttached) {
+        form.addEventListener('submit', interceptPrompt, true);
+        form._pgFormAttached = true;
+        console.log('Prompt Guardian: Attached to form submit');
+    }
+
+    if (btn || inputEl) {
         console.log('Prompt Guardian: Active on', window.location.hostname);
     }
 }
@@ -374,6 +395,18 @@ function injectStyles() {
         font-size: 13px;
         resize: vertical;
         margin-bottom: 14px;
+    }
+
+    .pg-blocked-msg {
+        font-size: 13px;
+        color: #F87171;
+        padding: 12px;
+        background: rgba(239,68,68,0.08);
+        border: 1px solid rgba(239,68,68,0.2);
+        border-radius: 8px;
+        margin-bottom: 14px;
+        text-align: center;
+        font-weight: 500;
     }
 
     .pg-actions {
