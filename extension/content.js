@@ -73,7 +73,7 @@ async function interceptPrompt(e) {
         }
 
         if (result.action === 'ALLOW') {
-            showSafeBadge(result.risk_score || 0);
+            showSafeOverlay(result.risk_score || 0, promptText);
             logToHistory(promptText, result, 'auto', () => {
                 proceedWithSend(sel);
             });
@@ -129,13 +129,11 @@ async function showBlockOverlay(original, result, sel, inputEl) {
     const attackType = result.attack_type || 'Unknown';
     const attackLabel = result.attack_label || attackType;
     const explanation = result.explanation || '';
-    const sanitized = result.sanitized_prompt || '';
+    const safeVersions = result.safe_versions || [];
 
-    // Check if sanitized version is actually useful
-    // (not a blocking message and not just [REDACTED] markers)
-    const isUsefulSanitized = sanitized
-        && !sanitized.startsWith('[Entire prompt')
-        && sanitized.replace(/\[REDACTED\]/g, '').trim().length > 3;
+    // Check if we have useful sanitized versions
+    const hasUsefulVersions = safeVersions.length > 0 && 
+        safeVersions.some(v => v && !v.startsWith('[This prompt is entirely malicious'));
 
     overlay.innerHTML = `
     <div class="pg-modal">
@@ -159,15 +157,25 @@ async function showBlockOverlay(original, result, sel, inputEl) {
 
         ${result.translation_hint ? `<div class="pg-label" style="background:#1E293B;padding:8px;border-radius:6px;margin-top:8px;border-left:3px solid #7C3AED;">🌐 Translation hint: "${escapeHtml(result.translation_hint)}"</div>` : ''}
 
-        ${isUsefulSanitized ? `
-        <div class="pg-sanitized-label">Sanitized version (injection removed):</div>
-        <textarea id="pg-clean" class="pg-sanitized">${escapeHtml(sanitized)}</textarea>
+        ${hasUsefulVersions ? `
+        <div class="pg-sanitized-label">Choose a sanitized version to send:</div>
+        <div class="pg-versions-container">
+          ${safeVersions.map((v, i) => `
+            <div class="pg-version-option">
+              <input type="radio" name="pg-version" id="pg-version-${i}" value="${i}" ${i === 0 ? 'checked' : ''}>
+              <label for="pg-version-${i}" class="pg-version-label">
+                <span class="pg-version-title">Version ${i + 1}</span>
+                <textarea class="pg-version-text" readonly>${escapeHtml(v)}</textarea>
+              </label>
+            </div>
+          `).join('')}
+        </div>
         ` : `
         <div class="pg-blocked-msg">This prompt is entirely malicious and has been blocked.</div>
         `}
 
         <div class="pg-actions">
-          ${isUsefulSanitized ? '<button class="pg-btn safe" id="pg-clean-send">Send Sanitized</button>' : ''}
+          ${hasUsefulVersions ? '<button class="pg-btn safe" id="pg-send-sanitized">Send Selected Version</button>' : ''}
           <button class="pg-btn cancel" id="pg-cancel">Cancel</button>
         </div>
       </div>
@@ -201,14 +209,18 @@ async function showBlockOverlay(original, result, sel, inputEl) {
         });
     }
 
-    const cleanSendBtn = document.getElementById('pg-clean-send');
-    if (cleanSendBtn) {
-        cleanSendBtn.onclick = () => {
-            const cleanText = document.getElementById('pg-clean').value;
-            setInputValue(inputEl, cleanText);
-            overlay.remove();
-            logToHistory(original, result, 'sanitized');
-            setTimeout(() => proceedWithSend(sel), 100);
+    const sendSanitizedBtn = document.getElementById('pg-send-sanitized');
+    if (sendSanitizedBtn) {
+        sendSanitizedBtn.onclick = () => {
+            const selectedRadio = document.querySelector('input[name="pg-version"]:checked');
+            if (selectedRadio) {
+                const selectedIndex = parseInt(selectedRadio.value);
+                const selectedVersion = safeVersions[selectedIndex];
+                setInputValue(inputEl, selectedVersion);
+                overlay.remove();
+                logToHistory(original, result, 'sanitized');
+                setTimeout(() => proceedWithSend(sel), 100);
+            }
         };
     }
 
@@ -290,6 +302,44 @@ async function showWarningOverlay(original, result, sel, inputEl, isHoneypot = f
     document.getElementById('pg-cancel').onclick = () => overlay.remove();
 }
 
+async function showSafeOverlay(score, promptText) {
+    document.getElementById('pg-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pg-overlay';
+
+    overlay.innerHTML = `
+    <div class="pg-modal">
+      <div class="pg-header safe">✅ Prompt Guardian — SAFE PROMPT</div>
+      <div class="pg-body">
+        <div class="pg-score-row">
+          <div class="pg-score safe">Risk: ${score}%</div>
+          <div class="pg-confidence">LOW RISK</div>
+        </div>
+        <div class="pg-explanation">This prompt has been analyzed and deemed safe to send. No injection patterns were detected.</div>
+        <div class="pg-prompt-preview">
+          <div class="pg-prompt-label">Your prompt:</div>
+          <div class="pg-prompt-text">${escapeHtml(promptText.slice(0, 200))}${promptText.length > 200 ? '...' : ''}</div>
+        </div>
+        <div class="pg-actions">
+          <button class="pg-btn safe" id="pg-proceed">Proceed</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+    injectStyles();
+    document.body.appendChild(overlay);
+
+    // Auto-dismiss after 2 seconds
+    setTimeout(() => {
+        const btn = document.getElementById('pg-proceed');
+        if (btn) btn.click();
+    }, 2000);
+
+    document.getElementById('pg-proceed').onclick = () => overlay.remove();
+}
+
 // ---------------- UTIL ----------------
 function proceedWithSend(sel) {
     const btn = document.querySelector(sel.send);
@@ -347,6 +397,8 @@ function logToHistory(prompt, result, userAction = 'auto', onDone = null) {
                 is_multilingual_attack: !!result.is_multilingual_attack,
                 translation_hint: result.translation_hint || null,
                 user_action: userAction,
+                pattern_score: result.pattern_score || 0,
+                groq_score: result.groq_score || 0,
             });
 
             // Keep max 100 entries
@@ -482,6 +534,7 @@ function injectStyles() {
     }
     .pg-header.danger { background: #DC2626; color: white; }
     .pg-header.warn { background: #D97706; color: white; }
+    .pg-header.safe { background: #059669; color: white; }
 
     .pg-body { padding: 20px; }
 
@@ -497,6 +550,7 @@ function injectStyles() {
     }
     .pg-score.danger { color: #EF4444; }
     .pg-score.warn { color: #F59E0B; }
+    .pg-score.safe { color: #10B981; }
     .pg-confidence {
         font-size: 12px;
         color: #94A3B8;
@@ -535,10 +589,84 @@ function injectStyles() {
         margin-bottom: 14px;
     }
 
+    .pg-versions-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .pg-version-option {
+        position: relative;
+    }
+    .pg-version-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+    }
+    .pg-version-label {
+        display: block;
+        cursor: pointer;
+        padding: 12px;
+        background: #1E293B;
+        border: 2px solid #334155;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    .pg-version-option input[type="radio"]:checked + .pg-version-label {
+        border-color: #059669;
+        background: rgba(5, 150, 105, 0.1);
+    }
+    .pg-version-label:hover {
+        border-color: #475569;
+    }
+    .pg-version-title {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #10B981;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .pg-version-text {
+        width: 100%;
+        min-height: 50px;
+        padding: 8px;
+        background: #0F172A;
+        color: #E2E8F0;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 12px;
+        resize: vertical;
+    }
+
+    .pg-prompt-preview {
+        margin-bottom: 14px;
+    }
+    .pg-prompt-label {
+        font-size: 11px;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+    .pg-prompt-text {
+        padding: 10px;
+        background: #1E293B;
+        color: #E2E8F0;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
     .pg-blocked-msg {
         font-size: 13px;
         color: #F87171;
         padding: 12px;
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.2);
         background: rgba(239,68,68,0.08);
         border: 1px solid rgba(239,68,68,0.2);
         border-radius: 8px;

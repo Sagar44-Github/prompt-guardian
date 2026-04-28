@@ -18,7 +18,7 @@ import logging
 from firewall.patterns import pattern_check
 from firewall.groq_checker import groq_check
 from firewall.scorer import calculate_risk_score
-from firewall.sanitizer import sanitize_prompt, get_safe_version
+from firewall.sanitizer import sanitize_prompt, get_safe_version, generate_safe_versions
 from firewall.language_detector import detect_language, is_non_english
 
 logger = logging.getLogger("prompt-guardian")
@@ -171,9 +171,11 @@ def analyze_prompt(prompt: str) -> dict:
     try:
         sanitized = sanitize_prompt(prompt, pattern_matches)
         safe_version = get_safe_version(prompt, sanitized)
+        safe_versions = generate_safe_versions(prompt, pattern_matches)
         layers_used.append("sanitizer")
     except Exception as e:
         safe_version = prompt
+        safe_versions = [prompt, prompt, prompt]
         logger.error("Sanitizer failed: %s", str(e))
 
     # ── Build final response ──────────────────────────────────────────────
@@ -195,6 +197,7 @@ def analyze_prompt(prompt: str) -> dict:
         "groq_reason":      groq_reason,
         "groq_skipped":     groq_skipped,
         "sanitized_prompt": safe_version,
+        "safe_versions":    safe_versions,
         "analysis_layers":  layers_used,
         "pipeline_time_ms": pipeline_time,
         # Language detection fields (Feature 5)

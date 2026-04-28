@@ -78,3 +78,58 @@ def get_safe_version(original: str, sanitized: str) -> str:
     sanitized = re.sub(r"\s{2,}", " ", sanitized).strip()
 
     return sanitized
+
+
+def generate_safe_versions(original: str, matches: list) -> list:
+    """
+    Generate 3 different safe versions of a malicious prompt.
+
+    Returns a list of 3 sanitized versions with different approaches:
+        1. Conservative: Replace all matches with [REDACTED]
+        2. Moderate: Replace with generic placeholders
+        3. Aggressive: Remove matches entirely and clean up
+
+    Args:
+        original: The original prompt string.
+        matches: List of match dicts from pattern_check().
+
+    Returns:
+        List of 3 safe version strings.
+    """
+    if not matches:
+        return [original, original, original]
+
+    # Version 1: Conservative - [REDACTED] markers
+    v1 = sanitize_prompt(original, matches)
+    v1 = get_safe_version(original, v1)
+
+    # Version 2: Moderate - Replace with generic placeholders
+    v2 = original
+    for match_info in sorted(matches, key=lambda m: len(m.get("match", "")), reverse=True):
+        matched_text = match_info.get("match", "")
+        if not matched_text:
+            continue
+        pattern = re.escape(matched_text)
+        v2 = re.sub(pattern, "[removed content]", v2, flags=re.IGNORECASE)
+    v2 = re.sub(r"(\[removed content\]\s*){2,}", "[removed content] ", v2)
+    v2 = re.sub(r"\s{2,}", " ", v2).strip()
+
+    # Version 3: Aggressive - Remove entirely
+    v3 = original
+    for match_info in sorted(matches, key=lambda m: len(m.get("match", "")), reverse=True):
+        matched_text = match_info.get("match", "")
+        if not matched_text:
+            continue
+        pattern = re.escape(matched_text)
+        v3 = re.sub(pattern, "", v3, flags=re.IGNORECASE)
+    v3 = re.sub(r"\s{2,}", " ", v3).strip()
+
+    # Check if any version is entirely empty
+    versions = []
+    for v in [v1, v2, v3]:
+        if not v or v == "[Entire prompt contained injection patterns and was blocked]":
+            versions.append("[This prompt is entirely malicious and cannot be sanitized]")
+        else:
+            versions.append(v)
+
+    return versions
