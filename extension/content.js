@@ -54,14 +54,15 @@ async function interceptPrompt(e) {
 
         if (result.action === 'ALLOW') {
             showSafeBadge(result.risk_score || 0);
-            logToHistory(promptText, result);
-            proceedWithSend(sel);
+            logToHistory(promptText, result, 'auto', () => {
+                proceedWithSend(sel);
+            });
         } else if (result.action === 'WARN') {
+            logToHistory(promptText, result);
             showWarningOverlay(promptText, result, sel, inputEl);
-            logToHistory(promptText, result);
         } else {
-            showBlockOverlay(promptText, result, sel, inputEl);
             logToHistory(promptText, result);
+            showBlockOverlay(promptText, result, sel, inputEl);
         }
 
     } catch (err) {
@@ -208,7 +209,7 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-function logToHistory(prompt, result, userAction = 'auto') {
+function logToHistory(prompt, result, userAction = 'auto', onDone = null) {
     try {
         chrome.storage.local.get(['pg_history'], (data) => {
             const history = data.pg_history || [];
@@ -223,10 +224,13 @@ function logToHistory(prompt, result, userAction = 'auto') {
             });
 
             // Keep max 100 entries
-            chrome.storage.local.set({ pg_history: history.slice(0, 100) });
+            chrome.storage.local.set({ pg_history: history.slice(0, 100) }, () => {
+                if (onDone) onDone();
+            });
         });
     } catch (e) {
         console.warn('Prompt Guardian: storage unavailable', e);
+        if (onDone) onDone();
     }
 }
 

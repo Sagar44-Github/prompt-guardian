@@ -1,10 +1,19 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Load data immediately, then auto-refresh every 3 seconds
+    loadData();
+    setInterval(loadData, 3000);
+
+    // Backend health check
+    checkHealth();
+    setInterval(checkHealth, 10000);
+});
+
+function loadData() {
     const totalEl = document.getElementById("total");
     const blockedEl = document.getElementById("blocked");
     const safeEl = document.getElementById("safe");
     const historyContainer = document.getElementById("history");
 
-    // ── Load real history from Chrome storage ──────────────────────────
     chrome.storage.local.get(["pg_history"], (data) => {
         const history = data.pg_history || [];
 
@@ -34,17 +43,14 @@ document.addEventListener("DOMContentLoaded", () => {
         history.slice(0, 20).forEach((entry) => {
             const div = document.createElement("div");
 
-            // Choose CSS class based on action
             let cls = "safe";
             if (entry.action === "BLOCK") cls = "danger";
             else if (entry.action === "WARN") cls = "warn";
 
             div.className = `entry ${cls}`;
 
-            // Format timestamp
             const timeAgo = formatTimeAgo(entry.timestamp);
 
-            // Attack label
             const attackLabel =
                 entry.attack_type && entry.attack_type !== "Unknown"
                     ? entry.attack_type
@@ -63,8 +69,9 @@ document.addEventListener("DOMContentLoaded", () => {
             historyContainer.appendChild(div);
         });
     });
+}
 
-    // ── Backend health check ──────────────────────────────────────────
+function checkHealth() {
     const statusDot = document.querySelector(".status-dot");
     const footerEl = document.querySelector(".footer");
 
@@ -74,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (data.status === "ok") {
                 statusDot.style.background = "#10B981";
                 statusDot.style.boxShadow = "0 0 12px rgba(16,185,129,0.55)";
+                footerEl.innerHTML = `<span class="status-dot" style="background:#10B981;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 12px rgba(16,185,129,0.55)"></span> Backend: online`;
             }
         })
         .catch(() => {
@@ -81,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
             statusDot.style.boxShadow = "0 0 12px rgba(239,68,68,0.55)";
             footerEl.innerHTML = `<span class="status-dot" style="background:#EF4444;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 12px rgba(239,68,68,0.55)"></span> Backend: offline`;
         });
-});
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
