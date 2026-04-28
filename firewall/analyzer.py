@@ -10,6 +10,7 @@ Orchestrates all firewall layers into a single entry point:
     6. Response assembly with full metadata
 """
 
+import re
 import time
 import hashlib
 import logging
@@ -41,7 +42,6 @@ def _compute_prompt_hash(prompt: str) -> str:
 
 def _detect_suspicious_encoding(prompt: str) -> list:
     """Check for invisible characters or suspicious Unicode patterns."""
-    import re
     flags = []
     for pat in _SUSPICIOUS_CHAR_PATTERNS:
         if re.search(pat, prompt):

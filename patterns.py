@@ -252,6 +252,12 @@ INJECTION_PATTERNS = [
      "harmful_content", 0.87),
 ]
 
+# Pre-compile all patterns at module load for performance
+_COMPILED_PATTERNS = [
+    (re.compile(pattern, re.IGNORECASE), attack_type, weight)
+    for pattern, attack_type, weight in INJECTION_PATTERNS
+]
+
 
 # ── Severity thresholds ───────────────────────────────────────────────────────
 _SEVERITY_LEVELS = [
@@ -291,11 +297,11 @@ def pattern_check(prompt: str) -> dict:
     lowered = prompt.lower().strip()
     matches = []
 
-    for pattern, attack_type, weight in INJECTION_PATTERNS:
-        found = re.search(pattern, lowered)
+    for compiled_re, attack_type, weight in _COMPILED_PATTERNS:
+        found = compiled_re.search(lowered)
         if found:
             matches.append({
-                "pattern": pattern,
+                "pattern": compiled_re.pattern,
                 "attack_type": attack_type,
                 "weight": weight,
                 "match": found.group(0),
