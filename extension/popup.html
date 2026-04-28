@@ -175,9 +175,33 @@
       border: 1px dashed #334155;
     }
 
+    /* Dashboard Button */
+    .dashboard-btn {
+      display: block;
+      width: 100%;
+      margin-top: 14px;
+      padding: 10px 14px;
+      background: #0F172A;
+      color: #60A5FA;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    }
+    .dashboard-btn:hover {
+      background: #1E293B;
+      border-color: #60A5FA;
+      transform: translateY(-1px);
+    }
+    .dashboard-btn:active { transform: translateY(0); }
+
     /* Footer */
     .footer {
-      margin-top: 20px;
+      margin-top: 14px;
       padding-top: 14px;
       border-top: 1px solid rgba(255,255,255,0.05);
       text-align: center;
@@ -241,6 +265,9 @@
       </div>
     </div>
 
+    <!-- Dashboard Button -->
+    <button class="dashboard-btn" id="open-dashboard">📊 Open Full Threat Dashboard</button>
+
     <!-- Footer -->
     <div class="footer">
       <span class="status-dot"></span>
@@ -250,6 +277,11 @@
   </div>
 
   <script src="popup.js"></script>
+  <script>
+    document.getElementById('open-dashboard').addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
+    });
+  </script>
 
 </body>
 </html>

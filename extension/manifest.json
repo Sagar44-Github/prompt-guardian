@@ -6,7 +6,8 @@
     "permissions": [
         "activeTab",
         "scripting",
-        "storage"
+        "storage",
+        "tabs"
     ],
     "host_permissions": [
         "https://chat.openai.com/*",
@@ -35,5 +36,11 @@
     "action": {
         "default_popup": "popup.html",
         "default_title": "Prompt Guardian"
-    }
+    },
+    "web_accessible_resources": [
+        {
+            "resources": ["dashboard.html", "dashboard.js"],
+            "matches": ["<all_urls>"]
+        }
+    ]
 }
