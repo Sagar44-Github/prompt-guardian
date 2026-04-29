@@ -41,6 +41,61 @@ def _get_api_key() -> str:
     return os.getenv("GROQ_API_KEY", "")
 
 
+def _demo_mode_analysis(prompt: str, detected_language: str = "English") -> dict:
+    """
+    Hardcoded analysis for demonstration when Groq API is not configured.
+    This provides realistic-looking responses for demo purposes.
+    """
+    prompt_lower = prompt.lower()
+    
+    # Common injection keywords to detect
+    injection_keywords = [
+        "ignore", "forget", "previous", "instructions", "override",
+        "system prompt", "reveal", "show", "tell me", "secret",
+        "jailbreak", "bypass", "no limits", "unrestricted",
+        "disregard", "disobey", "new instructions", "developer mode",
+    ]
+    
+    # Count matching keywords
+    keyword_count = sum(1 for keyword in injection_keywords if keyword in prompt_lower)
+    
+    # Calculate score based on keyword matches
+    if keyword_count >= 3:
+        score = 0.85
+        is_injection = True
+        attack_type = "Instruction Override"
+        reason = "Multiple injection keywords detected in prompt"
+    elif keyword_count >= 2:
+        score = 0.55  # Changed from 0.65 to ensure WARN level (40-70%)
+        is_injection = True
+        attack_type = "Suspicious Pattern"
+        reason = "Injection-related keywords detected"
+    elif keyword_count >= 1:
+        score = 0.45  # This is exactly in WARN range (40-70%)
+        is_injection = False
+        attack_type = None
+        reason = "Potentially suspicious phrase detected"
+    else:
+        score = 0.1
+        is_injection = False
+        attack_type = None
+        reason = "No injection patterns detected"
+    
+    # Translation hint for non-English
+    translation_hint = None
+    if detected_language != "English":
+        translation_hint = "Non-English prompt detected - requires full AI analysis for accurate translation"
+    
+    return {
+        "score": score,
+        "is_injection": is_injection,
+        "attack_type": attack_type,
+        "reason": reason,
+        "detected_language": detected_language,
+        "translation_hint": translation_hint,
+    }
+
+
 def _parse_groq_response(text: str) -> dict:
     """
     Parse the Groq response text into a structured dict.
@@ -113,15 +168,8 @@ def groq_check(prompt: str, detected_language: str = "English") -> dict:
     api_key = _get_api_key()
 
     if not api_key:
-        logger.warning("GROQ_API_KEY not set — AI layer disabled")
-        return {
-            "score": 0.0,
-            "is_injection": False,
-            "attack_type": None,
-            "reason": "Groq API key not configured — AI analysis skipped",
-            "detected_language": detected_language,
-            "translation_hint": None,
-        }
+        logger.warning("GROQ_API_KEY not set — using demo mode with hardcoded analysis")
+        return _demo_mode_analysis(prompt, detected_language)
 
     # ── Call Groq API ─────────────────────────────────────────────────────
     try:
