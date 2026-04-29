@@ -18,12 +18,13 @@ import logging
 from firewall.patterns import pattern_check
 from firewall.groq_checker import groq_check
 from firewall.scorer import calculate_risk_score
-from firewall.sanitizer import sanitize_prompt, get_safe_version
+from firewall.sanitizer import sanitize_prompt, get_safe_version, generate_safe_versions
+from firewall.language_detector import detect_language, is_non_english
 
 logger = logging.getLogger("prompt-guardian")
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_PATTERN_FAST_PATH_THRESHOLD = 0.90   # Skip Groq for obvious attacks
+_PATTERN_FAST_PATH_THRESHOLD = 0.93   # Skip Groq for obvious attacks
 _SUSPICIOUS_CHAR_PATTERNS = [
     r"[\x00-\x08\x0b\x0c\x0e-\x1f]",   # Control characters
     r"[\u200b-\u200f\u2028-\u202f]",     # Zero-width / invisible Unicode
@@ -96,7 +97,7 @@ def analyze_prompt(prompt: str) -> dict:
     analysis_start = time.time()
     layers_used = []
 
-    # ── Pre-processing ────────────────────────────────────────────────────
+    # ── Pre-processing ────────────────────────────────────────────────────────
     prompt_hash = _compute_prompt_hash(prompt)
     prompt_stats = _compute_prompt_stats(prompt)
     encoding_flags = _detect_suspicious_encoding(prompt)
@@ -104,6 +105,18 @@ def analyze_prompt(prompt: str) -> dict:
 
     logger.info("Analysing prompt hash=%s chars=%d words=%d",
                 prompt_hash, prompt_stats["char_count"], prompt_stats["word_count"])
+
+    # ── Layer 0: Language Detection (NEW) ─────────────────────────────────
+    language_result = detect_language(prompt)
+    detected_language = language_result["language"]
+    language_confidence = language_result["confidence"]
+    language_emoji = language_result["emoji_code"]
+    prompt_is_non_english = is_non_english(prompt)
+    layers_used.append("language_detector")
+
+    if prompt_is_non_english:
+        logger.info("Non-English prompt detected: %s (%.1f%% confidence)",
+                    detected_language, language_confidence * 100)
 
     # ── Layer 1: Pattern Matching (always runs) ───────────────────────────
     pattern_result = pattern_check(prompt)
@@ -122,12 +135,14 @@ def analyze_prompt(prompt: str) -> dict:
             "is_injection": True,
             "attack_type": "Known Pattern",
             "reason": "High confidence pattern match — Groq analysis skipped",
+            "detected_language": detected_language,
+            "translation_hint": None,
         }
         groq_skipped = True
         logger.info("Pattern score %.2f >= threshold — Groq skipped", pattern_score)
     else:
         try:
-            groq_result = groq_check(prompt)
+            groq_result = groq_check(prompt, detected_language=detected_language)
             layers_used.append("groq")
         except Exception as e:
             # Groq failure should not break the pipeline — degrade gracefully
@@ -136,6 +151,8 @@ def analyze_prompt(prompt: str) -> dict:
                 "is_injection": False,
                 "attack_type": None,
                 "reason": "Groq analysis unavailable: {}".format(str(e)),
+                "detected_language": detected_language,
+                "translation_hint": None,
             }
             logger.error("Groq layer failed: %s", str(e))
 
@@ -154,9 +171,11 @@ def analyze_prompt(prompt: str) -> dict:
     try:
         sanitized = sanitize_prompt(prompt, pattern_matches)
         safe_version = get_safe_version(prompt, sanitized)
+        safe_versions = generate_safe_versions(prompt, pattern_matches)
         layers_used.append("sanitizer")
     except Exception as e:
         safe_version = prompt
+        safe_versions = [prompt, prompt, prompt]
         logger.error("Sanitizer failed: %s", str(e))
 
     # ── Build final response ──────────────────────────────────────────────
@@ -178,6 +197,13 @@ def analyze_prompt(prompt: str) -> dict:
         "groq_reason":      groq_reason,
         "groq_skipped":     groq_skipped,
         "sanitized_prompt": safe_version,
+        "safe_versions":    safe_versions,
         "analysis_layers":  layers_used,
         "pipeline_time_ms": pipeline_time,
+        # Language detection fields (Feature 5)
+        "detected_language":      detected_language,
+        "language_confidence":    round(language_confidence * 100, 1),
+        "language_emoji":         language_emoji,
+        "is_multilingual_attack": prompt_is_non_english and (score_result.get("action") != "ALLOW"),
+        "translation_hint":       groq_result.get("translation_hint", None),
     }
