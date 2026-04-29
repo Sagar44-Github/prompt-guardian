@@ -12,12 +12,12 @@ explanations, and UI-ready metadata.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Decision thresholds (on 0-100 scale) ──────────────────────────────────────
-_BLOCK_THRESHOLD = 70.0   # risk >= 70  →  BLOCK / DANGEROUS
-_WARN_THRESHOLD  = 40.0   # risk >= 40  →  WARN  / SUSPICIOUS
+_BLOCK_THRESHOLD = 60.0   # risk >= 60  →  BLOCK / DANGEROUS (lowered for pattern-only detection)
+_WARN_THRESHOLD  = 40.0   # risk >= 40  →  WARN  / SUSPICIOUS (lowered for pattern-only detection)
 
 # ── Layer weights ─────────────────────────────────────────────────────────────
-_PATTERN_WEIGHT = 0.50    # regex pattern layer contribution
-_GROQ_WEIGHT    = 0.50    # Groq AI layer contribution
+_PATTERN_WEIGHT = 0.80    # regex pattern layer contribution (increased when AI unavailable)
+_GROQ_WEIGHT    = 0.20    # Groq AI layer contribution (decreased when AI unavailable)
 
 # ── Dual-signal boost (both layers agree) ────────────────────────────────────
 _DUAL_BOOST     = 1.20    # 20% multiplier when both layers flag injection

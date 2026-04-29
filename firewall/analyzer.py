@@ -17,13 +17,15 @@ import logging
 
 from firewall.patterns import pattern_check
 from firewall.groq_checker import groq_check
+from firewall.openai_checker import openai_check
 from firewall.scorer import calculate_risk_score
 from firewall.sanitizer import sanitize_prompt, get_safe_version
+from firewall.language_detector import detect_language, is_non_english
 
 logger = logging.getLogger("prompt-guardian")
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_PATTERN_FAST_PATH_THRESHOLD = 0.90   # Skip Groq for obvious attacks
+_PATTERN_FAST_PATH_THRESHOLD = 0.95   # Only skip AI for extremely obvious attacks (95%+ pattern match)
 _SUSPICIOUS_CHAR_PATTERNS = [
     r"[\x00-\x08\x0b\x0c\x0e-\x1f]",   # Control characters
     r"[\u200b-\u200f\u2028-\u202f]",     # Zero-width / invisible Unicode
@@ -112,32 +114,64 @@ def analyze_prompt(prompt: str) -> dict:
     pattern_matches = pattern_result.get("matches", [])
     pattern_score = pattern_result.get("score", 0.0)
 
-    # ── Layer 2: Groq AI Analysis ─────────────────────────────────────────
+    # ── Language Detection ───────────────────────────────────────────────
+    detected_language = "English"
+    language_confidence = 0.0
+    try:
+        detected_language, language_confidence = detect_language(prompt)
+        layers_used.append("language_detector")
+        if is_non_english(detected_language):
+            logger.info("Non-English prompt detected: %s (%.1f%% confidence)",
+                        detected_language, language_confidence * 100)
+    except Exception as e:
+        logger.warning("Language detection failed: %s", str(e))
+
+    # ── Layer 2: AI Analysis (Groq primary, OpenAI fallback) ───────────────
     groq_skipped = False
+    openai_used = False
+
+    logger.info("Pattern score: %.2f, threshold: %.2f", pattern_score, _PATTERN_FAST_PATH_THRESHOLD)
 
     if pattern_score >= _PATTERN_FAST_PATH_THRESHOLD:
-        # Obvious attack — skip Groq API call to save time and cost
+        # Obvious attack — skip AI API call to save time and cost
         groq_result = {
             "score": 0.85,
             "is_injection": True,
             "attack_type": "Known Pattern",
-            "reason": "High confidence pattern match — Groq analysis skipped",
+            "reason": "High confidence pattern match — AI analysis skipped",
+            "detected_language": detected_language,
+            "translation_hint": None,
         }
         groq_skipped = True
-        logger.info("Pattern score %.2f >= threshold — Groq skipped", pattern_score)
+        logger.info("Pattern score %.2f >= threshold — AI skipped", pattern_score)
     else:
+        # Try Groq first
+        logger.info("Attempting Groq AI analysis...")
         try:
-            groq_result = groq_check(prompt)
+            groq_result = groq_check(prompt, detected_language=detected_language)
             layers_used.append("groq")
+            logger.info("Groq analysis completed successfully")
         except Exception as e:
-            # Groq failure should not break the pipeline — degrade gracefully
-            groq_result = {
-                "score": 0.0,
-                "is_injection": False,
-                "attack_type": None,
-                "reason": "Groq analysis unavailable: {}".format(str(e)),
-            }
-            logger.error("Groq layer failed: %s", str(e))
+            logger.warning("Groq layer failed: %s — trying OpenAI fallback", str(e))
+            # Groq failed, try OpenAI as backup
+            logger.info("Attempting OpenAI AI analysis as fallback...")
+            try:
+                groq_result = openai_check(prompt, detected_language=detected_language)
+                layers_used.append("openai")
+                openai_used = True
+                logger.info("OpenAI fallback succeeded")
+            except Exception as e2:
+                # Both AI providers failed — use pattern-based fallback
+                fallback_score = min(pattern_score + 0.2, 1.0)  # Boost pattern score slightly
+                groq_result = {
+                    "score": fallback_score,
+                    "is_injection": pattern_score > 0.4,
+                    "attack_type": pattern_result.get("attack_type"),
+                    "reason": "Both AI providers unavailable — using pattern-based fallback: {}".format(str(e)),
+                    "detected_language": detected_language,
+                    "translation_hint": None,
+                }
+                logger.error("Both AI layers failed — using pattern fallback")
 
     groq_reason = groq_result.get("reason", "")
 
